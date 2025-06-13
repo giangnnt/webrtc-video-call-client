@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>WebRTC with SignalR</title>
+    <style>
+        video {
+            width: 45%;
+            margin: 10px;
+            border: 2px solid #444;
+            border-radius: 10px;
+        }
+        #controls {
+            margin: 10px 0;
+        }
+        #connectionDisplay {
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h2>🧠 WebRTC + SignalR Demo</h2>
+
+    <div>
+        <video id="localVideo" autoplay muted playsinline></video>
+        <video id="remoteVideo" autoplay playsinline></video>
+    </div>
+
+    <div id="controls">
+        <div id="connectionDisplay">
+            Your Connection ID: <span id="connectionId">Loading...</span>
+        </div>
+
+        <input type="text" id="targetId" placeholder="Target Connection ID" />
+        <button id="sendOfferBtn" disabled>Send Offer</button>
+    </div>
+
+    <!-- SignalR & Your Script -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/7.0.5/signalr.min.js"></script>
+    <script src="main.js"></script> <!-- JS code bạn viết -->
+</body>
+</html>
