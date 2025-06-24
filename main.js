@@ -1,158 +1,269 @@
-// Create SignalR connection
+// Khởi tạo SignalR connection
 const connection = new signalR.HubConnectionBuilder()
-// replace with your signaling server
-    .withUrl("http:your-signaling-server/signaling", {
+    .withUrl("http://localhost:5118/signaling", {
         skipNegotiation: true,
         transport: signalR.HttpTransportType.WebSockets
     })
+    .withAutomaticReconnect()
+    .configureLogging(signalR.LogLevel.Information)
     .build();
 
-// Start SignalR connection
+// Biến toàn cục
+const localVideo = document.getElementById('localVideo');
+const remoteVideos = document.getElementById('remoteVideos');
+const roomIdInput = document.getElementById('roomId');
+const joinRoomBtn = document.getElementById('joinRoomBtn');
+const errorMessage = document.getElementById('errorMessage');
+const peerConnections = new Map();
+let localStream = null;
+let currentRoomId = null;
+let thisConnectionId = null;
+
+// Hiển thị thông báo lỗi
+function showError(message) {
+    errorMessage.textContent = message;
+    errorMessage.style.display = 'block';
+    setTimeout(() => errorMessage.style.display = 'none', 5000);
+}
+
+// Khởi động SignalR
 async function startSignalR() {
     try {
         await connection.start();
         console.log("✅ SignalR Connected!");
-        document.getElementById('sendOfferBtn').disabled = false;
+        document.getElementById('connectionId').textContent = connection.connectionId;
+        joinRoomBtn.disabled = false;
     } catch (err) {
         console.error("❌ SignalR Connection Error:", err);
-        // try to reconnect after 5 seconds
+        showError("Failed to connect to signaling server. Retrying...");
         setTimeout(startSignalR, 5000);
     }
 }
- 
-// receive connection id from signaling server
-connection.on("ReceiveConnectionId", (connectionId) => {
-    console.log("Received connection ID:", connectionId);
-    document.getElementById('connectionId').textContent = connectionId;
-});
 
-// start signalr connection
-startSignalR();
-
-// map to store peer connections
-const peerConnections = new Map();
-let localStream = null;
-
-
-// init the local stream (the camera and microphone of your browser)
+// Khởi tạo local stream
 async function initLocalStream() {
     try {
         localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        document.getElementById("localVideo").srcObject = localStream;
+        localVideo.srcObject = localStream;
     } catch (err) {
-        console.error("Failed to access camera/microphone", err);
+        console.error("Failed to access camera/microphone:", err);
+        showError("Cannot access camera or microphone. Please check permissions.");
     }
 }
 
-// Call this at the beginning
-initLocalStream();
+// Tạo ID phòng ngẫu nhiên
+function generateRoomId() {
+    return Math.random().toString(36).substr(2, 9);
+}
+
+// Tạo phòng mới
+async function createRoom() {
+    const roomId = generateRoomId();
+    roomIdInput.value = roomId;
+    await joinRoom();
+}
+
+async function joinRoom() {
+    const roomId = roomIdInput.value.trim();
+    if (!roomId) {
+        showError("Please enter a room ID");
+        return;
+    }
+    try {
+        currentRoomId = roomId;
+        const pc = createPeerConnection(thisConnectionId);
+        const offer = await pc.createOffer();
+        console.log(`[OFFER] Created offer:`, offer);
+
+        await pc.setLocalDescription(offer);
+        console.log(`[OFFER] Local description set`);
+
+        await connection.invoke("Join", roomId, JSON.stringify(offer));
+        console.log(`[SIGNALING] Sent Join with offer to room ${roomId}`);
+    } catch (err) {
+        console.error("Error joining room:", err);
+        showError("Failed to join room. Please try again.");
+    }
+}
 
 
-// create peer connection
-// the peer connection is used to send and receive media streams to the other peer
-// it also used to send and receive ice candidates from stun server to the other peer
+
+// Tạo peer connection
 function createPeerConnection(connectionId) {
     const pc = new RTCPeerConnection({
         iceServers: [
-          {
-            // replace with your turn server
-            urls: [
-              "turn:global.relay.metered.ca:80",
-              "turn:global.relay.metered.ca:443",
-              "turn:global.relay.metered.ca:443?transport=tcp"
-            ],
-            username: "0f6cc54d4b1286b627388ab2",
-            credential: "/+DdwhB2BKSQB2Z0"
-          },
-          // stun server (choose google or your own)
-          {
-            urls: "stun:stun.l.google.com:19302"
-          }
+            {
+                urls: ["turn:3.27.194.134:3478"],
+                username: "webrtcuser",
+                credential: "webrtcc@123"
+            },
+            {
+                urls: "stun:stun.l.google.com:19302"
+            }
         ]
-      });
-      
+    });
 
-    // the local stream contain the camera and microphone of your browser, 2 tracks in total
-    // for each track, we need to add it to the peer connection
+    // Thêm local stream
     if (localStream) {
-        localStream.getTracks().forEach(track => {
-            pc.addTrack(track, localStream);
-        });
+        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
     }
 
-    // when receive remote track from peer, we need to add it to the remote video element
+    // Xử lý remote stream
     pc.ontrack = (event) => {
-        console.log("Received remote track");
-        const remoteVideo = document.getElementById("remoteVideo");
+        console.log(`Received remote track from ${connectionId}`);
+        let remoteVideo = document.getElementById(`remoteVideo-${connectionId}`);
+        if (!remoteVideo) {
+            remoteVideo = document.createElement('video');
+            remoteVideo.id = `remoteVideo-${connectionId}`;
+            remoteVideo.autoplay = true;
+            remoteVideo.playsinline = true;
+            remoteVideos.appendChild(remoteVideo);
+        }
         remoteVideo.srcObject = event.streams[0];
     };
 
-    // when receive ice candidate from stun server, we need to send it to the signaling server
+    // Xử lý ICE candidate
     pc.onicecandidate = (event) => {
         if (event.candidate) {
-            connection.invoke("SendIceCandidate", connectionId, JSON.stringify(event.candidate));
+            console.log(`[TRICKLE] ConnectionId: ${connectionId} - Sending ICE candidate:`, event.candidate);
+            connection.invoke("Trickle", JSON.stringify(event.candidate))
+                .then(() => {
+                    console.log(`[TRICKLE] ConnectionId: ${connectionId} - ICE candidate sent successfully.`);
+                })
+                .catch(err => {
+                    console.error(`[TRICKLE] ConnectionId: ${connectionId} - Error sending ICE candidate:`, err);
+                });
+        } else {
+            console.log(`[TRICKLE] ConnectionId: ${connectionId} - All ICE candidates have been sent (null candidate).`);
         }
     };
 
-    // log the ice connection state
     pc.oniceconnectionstatechange = () => {
-        console.log("ICE State:", pc.iceConnectionState);
+        console.log(`ICE connection state: ${pc.iceConnectionState}`);
+        if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+            console.log('WebRTC connection established successfully!');
+        } else if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
+            console.error('WebRTC connection failed or disconnected');
+        }
     };
 
-    // store the peer connection in the map
     peerConnections.set(connectionId, pc);
     return pc;
 }
 
-// receive offer from signaling server
-connection.on("ReceiveOffer", async (connectionId, offer) => {
-    console.log("Received offer from:", connectionId);
-    const peerConnection = createPeerConnection(connectionId);
-    // set the remote description of the peer connection
-    await peerConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(offer)));
-
-    // create answer and set the local description of the peer connection
-    const answer = await peerConnection.createAnswer();
-    await peerConnection.setLocalDescription(answer);
-    await connection.invoke("SendAnswer", connectionId, JSON.stringify(answer));
+connection.on("ReceiveConnectionId", async (connectionId) => {
+    console.log(`Received connection ID: ${connectionId}`);
+    document.getElementById('connectionId').textContent = connectionId;
+    thisConnectionId = connectionId
 });
 
-// receive answer from signaling server
-connection.on("ReceiveAnswer", async (connectionId, answer) => {
-    console.log("Received answer from:", connectionId);
-    const peerConnection = peerConnections.get(connectionId);
-    if (peerConnection) {
-        // set the remote description of the peer connection
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(answer)));
+connection.on("ReceiveOffer", async (connectionId, offer) => {
+    console.log(`[SIGNALING] Received offer from ${connectionId}`);
+    const pc = createPeerConnection(connectionId);
+    try {
+        await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(offer)));
+        console.log(`[SDP] Remote description (offer) set for ${connectionId}`);
+
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        console.log(`[SDP] Created and set local answer for ${connectionId}`);
+
+        await connection.invoke("Answer", JSON.stringify(answer));
+        console.log(`[SIGNALING] Sent answer back to SFU for ${connectionId}`);
+    } catch (err) {
+        console.error("Error handling offer:", err);
+        showError("Failed to process offer.");
     }
 });
 
-// receive ice candidate from signaling server
-connection.on("ReceiveIceCandidate", async (connectionId, candidate) => {
-    console.log("Received ICE candidate from:", connectionId);
-    const peerConnection = peerConnections.get(connectionId);
-    if (peerConnection && candidate) {
+
+connection.on("ReceiveAnswer", async (connectionId, answer) => {
+    console.log(`[SIGNALING] Received answer from ${connectionId}:`, answer);
+    const pc = peerConnections.get(connectionId);
+    if (pc) {
         try {
-            // add the ice candidate to the peer connection
-            await peerConnection.addIceCandidate(new RTCIceCandidate(JSON.parse(candidate)));
+            await pc.setRemoteDescription({
+                type: "answer",
+                sdp: answer
+              });              
+            console.log(`[SDP] Remote description (answer) set for ${connectionId}`);
         } catch (err) {
-            console.error("Error adding received ICE candidate", err);
+            console.error("Error handling answer:", err);
+            showError("Failed to process answer.");
         }
     }
 });
 
-// send offer to the signaling server
-async function sendOffer() {
-    const targetId = document.getElementById("targetId").value;
-    if (!targetId) {
-        alert("Please enter target connection ID");
-        return;
+connection.on("ReceiveIceCandidate", async (connectionId, candidate) => {
+    console.log(`[SIGNALING] Received ICE candidate from ${connectionId}:`, candidate);
+    const pc = peerConnections.get(connectionId);
+    if (pc && candidate) {
+        try {
+            await pc.addIceCandidate(new RTCIceCandidate(JSON.parse(candidate)));
+            console.log(`[ICE] Candidate added for ${connectionId}`);
+        } catch (err) {
+            console.error("Error adding ICE candidate:", err);
+        }
     }
+});
 
-    const peerConnection = createPeerConnection(targetId);
-    const offer = await peerConnection.createOffer();
-    await peerConnection.setLocalDescription(offer);
-    await connection.invoke("SendOffer", targetId, JSON.stringify(offer));
+
+// // Xử lý sự kiện user join
+// connection.on("UserJoined", (connectionId) => {
+//     console.log(`User ${connectionId} joined the room`);
+//     if (!peerConnections.has(connectionId)) {
+//         const pc = createPeerConnection(connectionId);
+//         sendOffer(connectionId, pc);
+//     }
+// });
+
+// // Xử lý sự kiện user leave
+// connection.on("UserLeft", (connectionId) => {
+//     console.log(`User ${connectionId} left the room`);
+//     cleanupPeerConnection(connectionId);
+// });
+
+// Dọn dẹp peer connection
+function cleanupPeerConnection(connectionId) {
+    const pc = peerConnections.get(connectionId);
+    if (pc) {
+        pc.close();
+        peerConnections.delete(connectionId);
+        const remoteVideo = document.getElementById(`remoteVideo-${connectionId}`);
+        if (remoteVideo) remoteVideo.remove();
+    }
 }
 
-document.getElementById('sendOfferBtn').addEventListener('click', sendOffer);
+// // Gửi offer
+// async function sendOffer(connectionId, pc) {
+//     try {
+//         const offer = await pc.createOffer();
+//         await pc.setLocalDescription(offer);
+//         await connection.invoke("Offer", JSON.stringify(offer));
+//     } catch (err) {
+//         console.error("Error sending offer:", err);
+//         showError("Failed to send offer.");
+//     }
+// }
+
+// Xử lý ngắt kết nối SignalR
+connection.onclose(() => {
+    console.log("SignalR connection closed");
+    showError("Lost connection to server. Reconnecting...");
+    joinRoomBtn.disabled = true;
+    cleanupAllPeerConnections();
+});
+
+// Dọn dẹp tất cả peer connections
+function cleanupAllPeerConnections() {
+    peerConnections.forEach((pc, connectionId) => {
+        pc.close();
+        const remoteVideo = document.getElementById(`remoteVideo-${connectionId}`);
+        if (remoteVideo) remoteVideo.remove();
+    });
+    peerConnections.clear();
+}
+
+// Khởi động ứng dụng
+startSignalR();
+initLocalStream();
