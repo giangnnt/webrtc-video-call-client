@@ -16,7 +16,8 @@
       text-align: center;
     }
 
-    #roomControls, #videoContainer {
+    #roomControls,
+    #videoContainer {
       margin: 20px 0;
       text-align: center;
     }
@@ -34,15 +35,37 @@
       gap: 10px;
     }
 
+    .remote-video-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
     video {
       width: 320px;
       height: 240px;
       border: 2px solid #444;
       border-radius: 10px;
       background-color: #000;
+      object-fit: cover;
     }
 
-    input, button {
+    #localVideo {
+      border-color: #28a745;
+    }
+
+    #remoteVideos video {
+      border-color: #007bff;
+    }
+
+    .video-label {
+      margin-top: 5px;
+      font-size: 14px;
+      color: #333;
+    }
+
+    input,
+    button {
       padding: 10px;
       margin: 5px;
       border-radius: 5px;
@@ -66,19 +89,10 @@
       cursor: not-allowed;
     }
 
-    #errorMessage, #infoMessage {
-      margin-top: 10px;
-      font-weight: bold;
-    }
-
     #errorMessage {
       color: red;
       display: none;
-    }
-
-    #infoMessage {
-      color: green;
-      display: none;
+      margin-top: 10px;
     }
   </style>
 </head>
@@ -86,28 +100,27 @@
   <h2>🧠 WebRTC + SignalR Video Chat</h2>
 
   <div id="connectionDisplay">
-    Your Connection ID: <span id="connectionId">Loading...</span>
+    Your publisher Connection ID: <span id="publisherConnectionId">Loading...</span>
+    Your subscriber Connection ID: <span id="subscriberConnectionId">Loading...</span>
   </div>
 
   <div id="roomControls">
-    <input type="text" id="roomId" placeholder="Enter Room ID">
+    <input type="text" id="roomId" placeholder="Enter Room ID" />
     <button id="createRoomBtn" onclick="createRoom()">Create Room</button>
     <button id="joinRoomBtn" onclick="joinRoom()" disabled>Join Room</button>
     <div id="errorMessage"></div>
-    <div id="infoMessage"></div>
   </div>
 
   <div id="videoContainer">
     <div class="video-grid">
-      <video id="localVideo" autoplay muted playsinline></video>
-      <div id="remoteVideos">
-        <video id="remoteVideo-0" autoplay playsinline style="display:none"></video>
-        <video id="remoteVideo-1" autoplay playsinline style="display:none"></video>
-        <video id="remoteVideo-2" autoplay playsinline style="display:none"></video>
-        <video id="remoteVideo-3" autoplay playsinline style="display:none"></video>
-        <video id="remoteVideo-4" autoplay playsinline style="display:none"></video>
-        <video id="remoteVideo-5" autoplay playsinline style="display:none"></video>
+      <!-- Local video -->
+      <div class="remote-video-wrapper">
+        <video id="localVideo" autoplay playsinline muted></video>
+        <div class="video-label">You</div>
       </div>
+
+      <!-- Remote videos will be appended here -->
+      <div id="remoteVideos" class="video-grid"></div>
     </div>
   </div>
 
