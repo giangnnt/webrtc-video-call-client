@@ -24,6 +24,7 @@ let pubPeerConnection = null;
 // is init
 let isInit = true;
 
+
 function showError(message) {
     errorMessage.textContent = message;
     errorMessage.style.display = 'block';
@@ -56,6 +57,9 @@ async function initLocalStream() {
         if (localVideo) {
             localVideo.srcObject = localStream;
         }
+
+        // use to track
+        await signalingConnection.invoke("SetStreamPeerId", localStream.id);
         console.log("✅ Local stream initialized");
     } catch (err) {
         console.error("Failed to access camera/microphone:", err);
@@ -72,7 +76,7 @@ async function createRoom() {
     roomIdInput.value = roomId;
     await joinRoom();
 }
-
+// send a join request (publisher) to SFU, create pub sub peer connection
 async function joinRoom() {
     const roomId = roomIdInput.value.trim();
 
@@ -92,7 +96,7 @@ async function joinRoom() {
         console.log(`🚪 Joining room: ${roomId}`);
     
         // create init peer connection
-        subPeerConnection = createPeerConnection();
+        subPeerConnection = createSubcriberPeerConnection();
 
         pubPeerConnection = createPublisherPeerConnection();
         
@@ -110,7 +114,8 @@ async function joinRoom() {
     }
     
 }
-
+// create publisher peer connection
+// add local tracks to publisher peer connection
 function createPublisherPeerConnection() {
     const pc = new RTCPeerConnection({
         iceServers: [
@@ -144,10 +149,27 @@ function createPublisherPeerConnection() {
         }
     };
 
+    pc.onsignalingstatechange = () => {
+        console.log("📡 Signaling state:", pc.signalingState);
+    };
+    pc.onconnectionstatechange = () => {
+        console.log("🔗 Connection state:", pc.connectionState);
+    };
+    
+    pc.oniceconnectionstatechange = () => {
+        console.log("🧊 ICE connection state:", pc.iceConnectionState);
+    };
+    
+    pc.onicegatheringstatechange = () => {
+        console.log("🧊 ICE gathering state:", pc.iceGatheringState);
+    };
+
     return pc;
 }
-
-function createPeerConnection() {
+// create subscriber peer connection
+// receive remote tracks from SFU
+// receive data channel from SFU
+function createSubcriberPeerConnection() {
     const pc = new RTCPeerConnection({
         iceServers: [
             {
@@ -175,13 +197,14 @@ function createPeerConnection() {
         console.log(`📡 Received data channel from SFU: ${receiveChannel.label}`);
     };
 
-    pc.ontrack = (event) => {
+    pc.ontrack = async (event) => {
         console.log("🎬 Received remote track:", event.track.kind);
         const stream = event.streams[0];
         if (!stream) {
             console.warn("⚠️ No stream in track event");
             return;
         }
+        const peerId = await signalingConnection.invoke("GetPeerIdByStreamId", stream.id);
         
         const streamId = stream.id;
         const existing = document.getElementById(`remoteVideo-${streamId}`);
@@ -221,7 +244,8 @@ function createPeerConnection() {
     
         const label = document.createElement('div');
         label.className = 'video-label';
-        label.textContent = `User ${streamId.slice(-4)}`;
+
+        label.textContent = `User ${peerId}`;
         label.style.cssText = `
             position: absolute;
             bottom: 5px;
@@ -259,6 +283,10 @@ function createPeerConnection() {
     return pc;
 }
 
+signalingConnection.on("PeerJoined", async (peerId) => {
+    console.log("📥 Received peerId from SFU", peerId);
+});
+
 // Handle offers from SFU
 signalingConnection.on("ReceiveOffer", async (receivedConnectionId, offerData) => {
     console.log("📥 Received offer from SFU");
@@ -267,12 +295,11 @@ signalingConnection.on("ReceiveOffer", async (receivedConnectionId, offerData) =
         const offer = typeof offerData === "string" ? JSON.parse(offerData) : offerData;
         await subPeerConnection.setRemoteDescription(new RTCSessionDescription(offer));
         console.log("✅ Remote description set");
-
+        // 
         if (isInit) {
             isInit = false;
             const answer = await subPeerConnection.createAnswer();
-            await subPeerConnection.setLocalDescription(answer);
-            
+            await subPeerConnection.setLocalDescription(answer);            
     
             console.log("✅ Local description set");
             await signalingConnection.invoke("Answer", answer.sdp);
@@ -302,14 +329,14 @@ signalingConnection.on("ReceiveAnswer", async (receivedConnectionId, answer) => 
             sdp: sdpAnswer.sdp
         });
 
-        if (isInit) {
+        // if (isInit) {
             await pubPeerConnection.setRemoteDescription(desc);
             console.log("✅ Answer processed successfully");
             return;
-        }
+        // }
         
-        await subPeerConnection.setRemoteDescription(desc);
-        console.log("✅ Answer processed successfully");
+        // await subPeerConnection.setRemoteDescription(desc);
+        // console.log("✅ Answer processed successfully");
         
     } catch (err) {
         console.error("❌ Error setting remote description:", err);
@@ -318,13 +345,14 @@ signalingConnection.on("ReceiveAnswer", async (receivedConnectionId, answer) => 
 });
 
 let count = 0;
-signalingConnection.on("ReceiveIceCandidate", async (receivedConnectionId, candidateData, isInited) => {
+// the isPub is sent from signaling, to accurately add ice candidate to the correct peer connection
+signalingConnection.on("ReceiveIceCandidate", async (receivedConnectionId, candidateData, isPub) => {
     
     console.log("📥 Received ICE candidate from SFU", count++);
 
     const candidateObj = parseCandidate(candidateData);
     try {
-        if (isInited) {
+        if (isPub) {
             await pubPeerConnection.addIceCandidate(new RTCIceCandidate(candidateObj));
             console.log("🧊 ICE candidate added");
         } else {
@@ -358,6 +386,16 @@ signalingConnection.onclose(() => {
     showError("Lost connection to server. Reconnecting...");
     joinRoomBtn.disabled = true;
     cleanupAllPeerConnections();
+});
+
+signalingConnection.on("PeerDisconnected", async (peerId) => {
+    console.log("🔌 Peer disconnected", peerId);
+    // remove the remote video element
+    const streamId = await signalingConnection.invoke("GetStreamIdByPeerId", peerId);
+    const wrapper = document.getElementById(`wrapper-${streamId}`);
+    if (wrapper) {
+        wrapper.remove();
+    }
 });
 
 // Cleanup functions
