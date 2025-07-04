@@ -173,9 +173,9 @@ function createSubcriberPeerConnection() {
     const pc = new RTCPeerConnection({
         iceServers: [
             {
-                urls: ["turn:3.27.194.134:3478"],
-                username: "webrtcuser",
-                credential: "webrtcc@123"
+                urls: ["turn:35.197.146.171:3478"],
+                username: "webrtc",
+                credential: "supersecret"
               },
             { urls: "stun:stun.l.google.com:19302" }
         ]
