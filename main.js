@@ -96,7 +96,6 @@ async function joinRoom() {
         console.log(`🚪 Joining room: ${roomId}`);
     
         // create init peer connection
-        subPeerConnection = createSubcriberPeerConnection();
 
         pubPeerConnection = createPublisherPeerConnection();
         
@@ -120,9 +119,9 @@ function createPublisherPeerConnection() {
     const pc = new RTCPeerConnection({
         iceServers: [
             {
-                urls: ["turn:3.27.194.134:3478"],
-                username: "webrtcuser",
-                credential: "webrtcc@123"
+                urls: ["turn:35.197.146.171:3478"],
+                username: "webrtc",
+                credential: "supersecret"
               },
             { urls: "stun:stun.l.google.com:19302" }
         ]
@@ -140,7 +139,7 @@ function createPublisherPeerConnection() {
 
     pc.onicecandidate = (event) => {
         if (event.candidate) {
-            console.log("🧊 Sending ICE candidate");
+            console.log("🧊 Sending publisher ICE candidate");
             signalingConnection.invoke("Trickle", JSON.stringify(event.candidate))
                 .then(() => console.log("ICE candidate sent"))
                 .catch(err => console.error("Error sending ICE candidate:", err));
@@ -150,18 +149,18 @@ function createPublisherPeerConnection() {
     };
 
     pc.onsignalingstatechange = () => {
-        console.log("📡 Signaling state:", pc.signalingState);
+        console.log("📡 Signaling publisher state:", pc.signalingState);
     };
     pc.onconnectionstatechange = () => {
-        console.log("🔗 Connection state:", pc.connectionState);
+        console.log("🔗 Connection publisher state:", pc.connectionState);
     };
     
     pc.oniceconnectionstatechange = () => {
-        console.log("🧊 ICE connection state:", pc.iceConnectionState);
+        console.log("🧊 ICE publisher connection state:", pc.iceConnectionState);
     };
     
     pc.onicegatheringstatechange = () => {
-        console.log("🧊 ICE gathering state:", pc.iceGatheringState);
+        console.log("🧊 ICE gathering publisher state:", pc.iceGatheringState);
     };
 
     return pc;
@@ -183,7 +182,7 @@ function createSubcriberPeerConnection() {
     
     pc.onicecandidate = (event) => {
         if (event.candidate) {
-            console.log("🧊 Sending ICE candidate");
+            console.log("🧊 Sending subscriber ICE candidate");
             signalingConnection.invoke("Trickle", JSON.stringify(event.candidate))
                 .then(() => console.log("ICE candidate sent"))
                 .catch(err => console.error("Error sending ICE candidate:", err));
@@ -198,6 +197,13 @@ function createSubcriberPeerConnection() {
     };
 
     pc.ontrack = async (event) => {
+        console.log("Subscriber track muted?", event.track.muted);
+        event.track.onunmute = () => {
+            console.log("Track unmuted!");
+        };
+        event.track.onmute = () => {
+            console.log("Track muted!");
+        };
         console.log("🎬 Received remote track:", event.track.kind);
         const stream = event.streams[0];
         if (!stream) {
@@ -266,18 +272,18 @@ function createSubcriberPeerConnection() {
     };
     
     pc.onsignalingstatechange = () => {
-        console.log("📡 Signaling state:", pc.signalingState);
+        console.log("📡 Signaling subscriber state:", pc.signalingState);
     };
     pc.onconnectionstatechange = () => {
-        console.log("🔗 Connection state:", pc.connectionState);
+        console.log("🔗 Connection subscriber state:", pc.connectionState);
     };
     
     pc.oniceconnectionstatechange = () => {
-        console.log("🧊 ICE connection state:", pc.iceConnectionState);
+        console.log("🧊 ICE subscriber connection state:", pc.iceConnectionState);
     };
     
     pc.onicegatheringstatechange = () => {
-        console.log("🧊 ICE gathering state:", pc.iceGatheringState);
+        console.log("🧊 ICE gathering subscriber state:", pc.iceGatheringState);
     };
 
     return pc;
@@ -293,11 +299,12 @@ signalingConnection.on("ReceiveOffer", async (receivedConnectionId, offerData) =
     try {
         console.log("🔄 Processing offer from SFU...");
         const offer = typeof offerData === "string" ? JSON.parse(offerData) : offerData;
-        await subPeerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-        console.log("✅ Remote description set");
         // 
         if (isInit) {
             isInit = false;
+            subPeerConnection = createSubcriberPeerConnection();
+            await subPeerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+            console.log("✅ Remote description set");
             const answer = await subPeerConnection.createAnswer();
             await subPeerConnection.setLocalDescription(answer);            
     
@@ -305,6 +312,8 @@ signalingConnection.on("ReceiveOffer", async (receivedConnectionId, offerData) =
             await signalingConnection.invoke("Answer", answer.sdp);
             console.log("📤 Answer sent to SFU");
         } else {
+            await subPeerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+            console.log("✅ Remote description set");
             const answer = await subPeerConnection.createAnswer();
             await subPeerConnection.setLocalDescription(answer);
             
@@ -354,10 +363,10 @@ signalingConnection.on("ReceiveIceCandidate", async (receivedConnectionId, candi
     try {
         if (isPub) {
             await pubPeerConnection.addIceCandidate(new RTCIceCandidate(candidateObj));
-            console.log("🧊 ICE candidate added");
+            console.log("🧊 publisher ICE candidate added");
         } else {
             await subPeerConnection.addIceCandidate(new RTCIceCandidate(candidateObj));
-            console.log("🧊 ICE candidate added");
+            console.log("🧊 subscriber ICE candidate added");
         }
     } catch (err) {
         console.error("❌ Error adding ICE candidate:", err);
