@@ -23,6 +23,10 @@ let subPeerConnection = null;
 let pubPeerConnection = null;
 // is init
 let isInit = true;
+// is camera on
+let isCameraOn = true;
+// is mic on
+let isMicOn = true;
 
 
 function showError(message) {
@@ -66,6 +70,44 @@ async function initLocalStream() {
         showError("Cannot access camera or microphone. Please check permissions.");
     }
 }
+
+function toggleCamera() {
+    const videoTrack = localStream.getVideoTracks()[0];
+    if (videoTrack) {
+      // Đảo trạng thái trước
+      isCameraOn = !isCameraOn;
+  
+      // Gán đúng trạng thái
+      videoTrack.enabled = isCameraOn;
+  
+      console.log("Camera", isCameraOn ? "on" : "off");
+  
+      // Cập nhật nút (nếu bạn có)
+      const btn = document.getElementById("toggleCameraBtn");
+      if (btn) {
+        btn.textContent = isCameraOn ? "Turn Off Camera" : "Turn On Camera";
+      }
+    }
+  }
+
+  function toggleMic() {
+    const audioTrack = localStream.getAudioTracks()[0];
+    if (audioTrack) {
+      // Đảo trạng thái trước
+      isMicOn = !isMicOn;
+  
+      // Gán đúng trạng thái
+      audioTrack.enabled = isMicOn;
+  
+      console.log("Mic", isMicOn ? "on" : "off");
+  
+      // Cập nhật nút (nếu bạn có)
+      const btn = document.getElementById("toggleMicBtn");
+      if (btn) {
+        btn.textContent = isMicOn ? "Mute Mic" : "Unmute Mic";
+      }
+    }
+  }
 
 function generateRoomId() {
     return Math.random().toString(36).substr(2, 9);

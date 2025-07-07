@@ -116,12 +116,19 @@
       <div class="remote-video-wrapper">
         <video id="localVideo" autoplay playsinline muted></video>
         <div class="video-label">You</div>
+  
+        <!-- Thêm nút bật/tắt camera và mic -->
+        <div style="margin-top: 10px; display: flex; gap: 10px;">
+          <button id="toggleCameraBtn" onclick="toggleCamera()">Toggle Camera</button>
+          <button id="toggleMicBtn" onclick="toggleMic()">Toggle Mic</button>
+        </div>
       </div>
-
+  
       <!-- Remote videos will be appended here -->
       <div id="remoteVideos" class="video-grid"></div>
     </div>
   </div>
+  
 
   <!-- SignalR -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/7.0.5/signalr.min.js"></script>
