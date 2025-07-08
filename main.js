@@ -1,8 +1,9 @@
 // Init SignalR connection
 const signalingConnection = new signalR.HubConnectionBuilder()
-    .withUrl("http://localhost:5118/signaling", {
+    .withUrl("http://localhost:5000/signaling", {
         skipNegotiation: true,
-        transport: signalR.HttpTransportType.WebSockets
+        transport: signalR.HttpTransportType.WebSockets,
+        accessTokenFactory: () => accessToken
     })
     .withAutomaticReconnect()
     .configureLogging(signalR.LogLevel.Information)
@@ -27,7 +28,15 @@ let isInit = true;
 let isCameraOn = true;
 // is mic on
 let isMicOn = true;
+let accessToken = '';
 
+const accessTokenInput = document.getElementById('accessTokenInput');
+if (accessTokenInput) {
+    accessToken = accessTokenInput.value;
+    accessTokenInput.addEventListener('input', (e) => {
+        accessToken = e.target.value;
+    });
+}
 
 function showError(message) {
     errorMessage.textContent = message;
@@ -40,6 +49,7 @@ async function startSignaling() {
         await signalingConnection.start();
         console.log("Media SignalR Connected!");
         joinRoomBtn.disabled = false;
+        initLocalStream();
     } catch (err) {
         console.error("SignalR Connection Error:", err);
         showError("Failed to connect to signaling server. Retrying...");
@@ -331,7 +341,7 @@ function createSubcriberPeerConnection() {
     return pc;
 }
 
-signalingConnection.on("PeerJoined", async (peerId) => {
+signalingConnection.on("PeerJoined", async (userId, peerId) => {
     console.log("📥 Received peerId from SFU", peerId);
 });
 
@@ -439,7 +449,7 @@ signalingConnection.onclose(() => {
     cleanupAllPeerConnections();
 });
 
-signalingConnection.on("PeerDisconnected", async (peerId) => {
+signalingConnection.on("PeerDisconnected", async (userId, peerId) => {
     console.log("🔌 Peer disconnected", peerId);
     // remove the remote video element
     const streamId = await signalingConnection.invoke("GetStreamIdByPeerId", peerId);
@@ -469,5 +479,4 @@ function cleanupAllPeerConnections() {
 
 // Khởi tạo
 console.log("🚀 Initializing Signaling");
-startSignaling();
-initLocalStream();
+// startSignaling();

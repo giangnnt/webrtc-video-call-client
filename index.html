@@ -104,7 +104,9 @@
   </div>
 
   <div id="roomControls">
+    <input type="text" id="accessTokenInput" placeholder="Enter Access Token" />
     <input type="text" id="roomId" placeholder="Enter Room ID" />
+    <button id="connectSignalRBtn" onclick="startSignaling()">Kết nối SignalR</button>
     <button id="createRoomBtn" onclick="createRoom()">Create Room</button>
     <button id="joinRoomBtn" onclick="joinRoom()" disabled>Join Room</button>
     <div id="errorMessage"></div>
