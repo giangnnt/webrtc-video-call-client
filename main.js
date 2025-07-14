@@ -1,6 +1,7 @@
 // Init SignalR connection
 const signalingConnection = new signalR.HubConnectionBuilder()
-    .withUrl("http://localhost:5000/signaling", {
+    .withUrl("https://api.musetrip360.site/signaling", {
+        // https://api.musetrip360.site/signaling
         skipNegotiation: true,
         transport: signalR.HttpTransportType.WebSockets,
         accessTokenFactory: () => accessToken
@@ -171,7 +172,7 @@ function createPublisherPeerConnection() {
     const pc = new RTCPeerConnection({
         iceServers: [
             {
-                urls: ["turn:35.197.146.171:3478"],
+                urls: ["turn:34.87.114.164:3478"],
                 username: "webrtc",
                 credential: "supersecret"
               },
@@ -224,7 +225,7 @@ function createSubcriberPeerConnection() {
     const pc = new RTCPeerConnection({
         iceServers: [
             {
-                urls: ["turn:35.197.146.171:3478"],
+                urls: ["turn:34.87.114.164:3478"],
                 username: "webrtc",
                 credential: "supersecret"
               },
