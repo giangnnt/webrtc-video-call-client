@@ -1,7 +1,12 @@
 // Init SignalR connection
+//"http://localhost:5000/signaling";
+//"turn:localhost:3478"
+const server = "https://api.musetrip360.site/signaling";
+const turnServer = "turn:34.87.114.164:3478";
+
+
 const signalingConnection = new signalR.HubConnectionBuilder()
-    .withUrl("https://api.musetrip360.site/signaling", {
-        // https://api.musetrip360.site/signaling
+    .withUrl(server, {
         skipNegotiation: true,
         transport: signalR.HttpTransportType.WebSockets,
         accessTokenFactory: () => accessToken
@@ -30,12 +35,21 @@ let isCameraOn = true;
 // is mic on
 let isMicOn = true;
 let accessToken = '';
+let metadata = '';
 
 const accessTokenInput = document.getElementById('accessTokenInput');
 if (accessTokenInput) {
     accessToken = accessTokenInput.value;
     accessTokenInput.addEventListener('input', (e) => {
         accessToken = e.target.value;
+    });
+}
+
+const metadataInput = document.getElementById('metadataInput');
+if (metadataInput) {
+    metadata = metadataInput.value;
+    metadataInput.addEventListener('input', (e) => {
+        metadata = e.target.value;
     });
 }
 
@@ -50,6 +64,7 @@ async function startSignaling() {
         await signalingConnection.start();
         console.log("Media SignalR Connected!");
         joinRoomBtn.disabled = false;
+        document.getElementById('updateRoomStateBtn').disabled = false;
         initLocalStream();
     } catch (err) {
         console.error("SignalR Connection Error:", err);
@@ -172,7 +187,7 @@ function createPublisherPeerConnection() {
     const pc = new RTCPeerConnection({
         iceServers: [
             {
-                urls: ["turn:34.87.114.164:3478"],
+                urls: [turnServer],
                 username: "webrtc",
                 credential: "supersecret"
               },
@@ -225,7 +240,7 @@ function createSubcriberPeerConnection() {
     const pc = new RTCPeerConnection({
         iceServers: [
             {
-                urls: ["turn:34.87.114.164:3478"],
+                urls: [turnServer],
                 username: "webrtc",
                 credential: "supersecret"
               },
@@ -345,6 +360,23 @@ function createSubcriberPeerConnection() {
 signalingConnection.on("PeerJoined", async (userId, peerId) => {
     console.log("📥 Received peerId from SFU", peerId);
 });
+// room state management
+signalingConnection.on("ReceiveRoomState", async (roomState) => {
+
+    console.log("Receive room state", roomState);
+});
+
+// Function to update room state with current metadata
+async function updateRoomState() {
+    try {
+        await signalingConnection.invoke("UpdateRoomState", metadata);
+        console.log("📤 Room state updated with metadata:", metadata);
+    } catch (err) {
+        console.error("❌ Error updating room state:", err);
+    }
+}
+
+
 
 // Handle offers from SFU
 signalingConnection.on("ReceiveOffer", async (receivedConnectionId, offerData) => {
