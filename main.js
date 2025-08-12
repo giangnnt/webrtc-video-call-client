@@ -376,8 +376,6 @@ async function updateRoomState() {
     }
 }
 
-
-
 // Handle offers from SFU
 signalingConnection.on("ReceiveOffer", async (receivedConnectionId, offerData) => {
     console.log("📥 Received offer from SFU");
@@ -388,24 +386,15 @@ signalingConnection.on("ReceiveOffer", async (receivedConnectionId, offerData) =
         if (isInit) {
             isInit = false;
             subPeerConnection = createSubcriberPeerConnection();
-            await subPeerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-            console.log("✅ Remote description set");
-            const answer = await subPeerConnection.createAnswer();
-            await subPeerConnection.setLocalDescription(answer);            
-    
-            console.log("✅ Local description set");
-            await signalingConnection.invoke("Answer", answer.sdp);
-            console.log("📤 Answer sent to SFU");
-        } else {
-            await subPeerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-            console.log("✅ Remote description set");
-            const answer = await subPeerConnection.createAnswer();
-            await subPeerConnection.setLocalDescription(answer);
-            
-            console.log("✅ Local description set");
-            await signalingConnection.invoke("Answer", answer.sdp);
-            console.log("📤 Answer sent to SFU");
-        } 
+        }
+        await subPeerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+        console.log("✅ Remote description set");
+        const answer = await subPeerConnection.createAnswer();
+        await subPeerConnection.setLocalDescription(answer);            
+
+        console.log("✅ Local description set");
+        await signalingConnection.invoke("Answer", answer.sdp);
+        console.log("📤 Answer sent to SFU");
         }catch (err) {
             console.error("❌ Error processing offer from SFU:", err);
             showError("Failed to process offer from SFU.");
@@ -422,15 +411,9 @@ signalingConnection.on("ReceiveAnswer", async (receivedConnectionId, answer) => 
             type: sdpAnswer.type,
             sdp: sdpAnswer.sdp
         });
-
-        // if (isInit) {
             await pubPeerConnection.setRemoteDescription(desc);
             console.log("✅ Answer processed successfully");
             return;
-        // }
-        
-        // await subPeerConnection.setRemoteDescription(desc);
-        // console.log("✅ Answer processed successfully");
         
     } catch (err) {
         console.error("❌ Error setting remote description:", err);
